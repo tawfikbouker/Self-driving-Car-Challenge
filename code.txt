@@ -1,0 +1,105 @@
+const int S0 = 4;
+const int S1 = 5;
+const int S2 = 6;
+const int S3 = 7;
+const int OUT = 8;
+
+const int IN1 = 9;
+const int IN2 = 10;
+const int ENA = 11;
+const int MOTOR_SPEED = 120;
+
+#include <Servo.h>
+Servo tracker;
+const int SERVO_PIN = 3;
+const int SERVO_CENTER = 90;
+
+String lockedColor = "";
+int matchCount = 0;
+bool triggered = false;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(S0, OUTPUT);
+  pinMode(S1, OUTPUT);
+  pinMode(S2, OUTPUT);
+  pinMode(S3, OUTPUT);
+  pinMode(OUT, INPUT);
+  digitalWrite(S0, HIGH);
+  digitalWrite(S1, LOW);
+  pinMode(IN1, OUTPUT);
+  pinMode(IN2, OUTPUT);
+  pinMode(ENA, OUTPUT);
+  tracker.attach(SERVO_PIN);
+  tracker.write(SERVO_CENTER);
+}
+
+void loop() {
+  if (triggered) return;
+
+  int red = readColor(LOW, LOW);
+  int green = readColor(HIGH, HIGH);
+  int blue = readColor(LOW, HIGH);
+
+  String currentColor = detectColor(red, green, blue);
+
+  Serial.print("R: "); Serial.print(red);
+  Serial.print(" G: "); Serial.print(green);
+  Serial.print(" B: "); Serial.print(blue);
+  Serial.print(" → Detected: "); Serial.println(currentColor);
+
+  if (lockedColor == "") {
+    lockedColor = currentColor;
+    matchCount = 1;
+    Serial.print("🔒 Locked on first color: "); Serial.println(lockedColor);
+  } else if (currentColor == lockedColor) {
+    matchCount++;
+    Serial.print("✅ Match count: "); Serial.println(matchCount);
+  } else {
+    matchCount = 0;
+    Serial.println("❌ Color changed → reset count");
+  }
+
+  if (matchCount >= 12) {
+    Serial.println("🎯 12 matches reached → moving forward for 3 seconds");
+    driveForward(MOTOR_SPEED);
+    delay(3000);
+    stopMotors();
+    triggered = true;
+    Serial.println("🛑 Motion complete → robot halted");
+  }
+
+  delay(200);
+}
+
+int readColor(bool s2State, bool s3State) {
+  digitalWrite(S2, s2State);
+  digitalWrite(S3, s3State);
+  delay(50);
+  return pulseIn(OUT, LOW);
+}
+
+String detectColor(int r, int g, int b) {
+  if (r > 200 && g > 200 && b > 200 &&
+      abs(r - g) < 30 && abs(g - b) < 30) {
+    return "white";
+  } else if (r > 180 && g > 100 && b < 80) {
+    return "orange";
+  } else if (b > 180 && r < 100 && g < 100) {
+    return "blue";
+  } else {
+    return "unknown";
+  }
+}
+
+void driveForward(int speed) {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, speed);
+}
+
+void stopMotors() {
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+}
